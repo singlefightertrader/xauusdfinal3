@@ -39,7 +39,7 @@
         }
         .price-line span { font-size: 11px; font-weight: bold; background: #000; padding: 2px 6px; border: 1px solid; margin-right: 80px; }
 
-        /* MISSION PANEL (POSITION BELOW TF SELECTOR) */
+        /* MISSION PANEL */
         #mission-panel {
             position: fixed; right: 10px; top: 160px; width: 200px;
             background: rgba(0,0,0,0.9); border: 1px solid #333;
@@ -79,7 +79,7 @@
         .modal-box { background: #111; padding: 30px; border: 2px solid var(--cyan); width: 90%; max-width: 400px; text-align: center; }
         input { width: 100%; background: #000; color: var(--cyan); border: 1px solid #444; padding: 15px; font-size: 24px; text-align: center; margin: 20px 0; }
 
-        /* LOCK SCREEN (ENTRY DISCIPLINE) */
+        /* LOCK SCREEN */
         #lock-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.98); z-index: 5000; display: none;
@@ -144,7 +144,14 @@
     let mt5Offset = 0;
     let isLocked = false;
     let lastAlert = 0;
-    let currentActiveTF = 'm1'; // TF Context Awareness
+    let currentActiveTF = 'm1';
+
+    // --- HOLD TIME & NOTIFICATION STATE ---
+    let enterHoldStart = null;
+    const ENTER_HOLD_MS = 1200;
+    const ENTER_RADIUS = 0.20;
+    let notificationLocked = false;
+    let spikeValidState = false; 
 
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
@@ -154,6 +161,24 @@
         lastM5Bucket: null,
         lockedMission: {}
     };
+
+    // --- GENERATE SW.JS BLOB ON THE FLY ---
+    const swCode = `
+    self.addEventListener('install', e => self.skipWaiting());
+    self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
+    self.addEventListener('notificationclick', e => {
+        e.notification.close();
+        e.waitUntil(clients.matchAll({type:'window'}).then(cl => {
+            if(cl.length > 0) return cl[0].focus();
+            return clients.openWindow('/');
+        }));
+    });`;
+    const swBlob = new Blob([swCode], {type: 'application/javascript'});
+    const swUrl = URL.createObjectURL(swBlob);
+
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register(swUrl).catch(err => console.log("SW Error", err));
+    }
 
     function openSync() { document.getElementById('sync-modal').style.display = 'flex'; }
     
@@ -184,12 +209,51 @@
         }
     }
 
-    function getM5Bucket(ts) { return Math.floor(ts / 300000); }
+    // ENHANCED HOLD FILTER LOGIC (FITUR 2: SPIKE MODE)
+    function validateHoldEnter(state, currentPrice, missionData, tf) {
+        if (state !== "ENTER" || !missionData || !missionData[tf]) {
+            enterHoldStart = null;
+            spikeValidState = false;
+            return false;
+        }
+        const rawTarget = parseFloat(missionData[tf]);
+        if (isNaN(rawTarget)) return false;
+        
+        const realTarget = rawTarget + mt5Offset;
+        const dist = Math.abs(realTarget - currentPrice);
+
+        // Jika harga sudah menyentuh (dist dekat) lalu spike cepat menjauh tapi state masih ENTER
+        if (dist <= ENTER_RADIUS) {
+            spikeValidState = true; // Penanda Institusi/Bandar pernah menyentuh
+            if (!enterHoldStart) enterHoldStart = Date.now();
+        }
+
+        // Logic normal: hold time tercapai ATAU Spike Mode: pernah sentuh & masih di zona state ENTER
+        const isTimeMet = enterHoldStart && (Date.now() - enterHoldStart) >= ENTER_HOLD_MS;
+        return isTimeMet || (spikeValidState && state === "ENTER");
+    }
+
+    // NOTIFICATION LOGIC (FITUR 1)
+    function sendSniperNotification(bias, tf, price) {
+        if (Notification.permission === 'granted' && !notificationLocked && !isLocked) {
+            const title = "🔥 GOLD XAUUSD READY";
+            const options = {
+                body: `ENTER ${bias} – TF ${tf.toUpperCase()}\nHarga: ${price.toFixed(2)}`,
+                icon: 'https://cdn-icons-png.flaticon.com/512/2533/2533031.png',
+                vibrate: [200, 100, 200],
+                tag: 'sniper-entry',
+                renotify: true,
+                requireInteraction: true
+            };
+            navigator.serviceWorker.ready.then(reg => reg.showNotification(title, options));
+            notificationLocked = true; // Anti Spam (Reset on Arming/Wait)
+        }
+    }
 
     function resolveMission(tf, rawPrice) {
         const patch = window.__MISSION_PATCH__;
         if (patch.mt5Offset === null) return null;
-        const nowBucket = getM5Bucket(Date.now());
+        const nowBucket = Math.floor(Date.now() / 300000);
         if (nowBucket === patch.lastM5Bucket && patch.lockedMission[tf]) return patch.lockedMission[tf];
         const realMission = rawPrice + patch.mt5Offset;
         patch.lockedMission[tf] = realMission;
@@ -197,7 +261,6 @@
         return realMission;
     }
 
-    // 1️⃣ DRAW FULL MISSION LINE (ABSOLUTE SYNC)
     function drawMissionLine(tf, engineMission, enginePrice) {
         const overlay = document.getElementById('chart-overlay');
         if (!overlay || !window.__MISSION_PATCH__.visible) return;
@@ -213,10 +276,7 @@
         line.style.zIndex = (tf === currentActiveTF) ? '15' : '10';
         
         const realVal = engineMission + (window.__MISSION_PATCH__.mt5Offset || 0);
-        line.innerHTML = `
-            <span style="border-color:${color}; color:${color}; background:rgba(0,0,0,0.8); right:0; position:absolute;">
-                ${tf.toUpperCase()} ${realVal.toFixed(2)}
-            </span>`;
+        line.innerHTML = `<span style="border-color:${color}; color:${color}; background:rgba(0,0,0,0.8); right:0; position:absolute;">${tf.toUpperCase()} ${realVal.toFixed(2)}</span>`;
         overlay.appendChild(line);
     }
 
@@ -235,15 +295,17 @@
             const btns = document.querySelectorAll('.btn-ex');
             const stateText = document.getElementById('state-text');
 
-            // 2️⃣ & 3️⃣ MULTI-TF AWARENESS LOGIC
-            let activeMissionRaw = data.mission ? data.mission[currentActiveTF] : null;
-            let tfEnterTriggered = false;
-
-            if (activeMissionRaw && activeMissionRaw !== 'ACHIEVED') {
-                const realTarget = parseFloat(activeMissionRaw) + mt5Offset;
-                const dist = Math.abs(realTarget - REAL_PRICE);
-                if (dist < 0.15 && state === "ENTER") {
-                    tfEnterTriggered = true;
+            // FITUR 3: MULTI TIMEFRAME AWARENESS
+            let tfEnterTriggered = validateHoldEnter(state, REAL_PRICE, data.mission, currentActiveTF);
+            
+            // Background check for other TFs for notifications
+            if (!tfEnterTriggered && !notificationLocked) {
+                for (let tf of TF_LIST) {
+                    if (tf === currentActiveTF) continue;
+                    if (validateHoldEnter(state, REAL_PRICE, data.mission, tf)) {
+                        sendSniperNotification(data.discretionaryZone.bias, tf, REAL_PRICE);
+                        break;
+                    }
                 }
             }
 
@@ -251,24 +313,27 @@
                 bar.className = "enter-mode";
                 stateText.innerText = `ENTER ${data.discretionaryZone.bias} (${currentActiveTF.toUpperCase()})`;
                 btns.forEach(b => b.classList.add('ready'));
-                if (currentActiveTF === 'm1') beep(); // Audio only for M1 as per rule
+                
+                // M1 specific alert (Fitur 3)
+                if (currentActiveTF === 'm1') beep();
+                
+                sendSniperNotification(data.discretionaryZone.bias, currentActiveTF, REAL_PRICE);
             } else if (state === "ARMING") {
                 bar.className = "";
                 stateText.innerText = `ARMING... (${currentActiveTF.toUpperCase()})`;
                 btns.forEach(b => b.classList.remove('ready'));
+                notificationLocked = false; 
             } else {
                 bar.className = "";
                 stateText.innerText = `WAIT / ARMING (${currentActiveTF.toUpperCase()})`;
                 btns.forEach(b => b.classList.remove('ready'));
+                notificationLocked = false;
             }
 
-            // 4️⃣ & 5️⃣ MISSION RENDERER (ALL TF PERSISTENCE)
+            // MISSION RENDERER
             if (data.mission && mt5Offset !== null) {
                 const overlay = document.getElementById('chart-overlay');
                 if (overlay) overlay.innerHTML = '';
-                let closestTF = null;
-                let minDist = Infinity;
-
                 TF_LIST.forEach(tf => {
                     const raw = data.mission[tf];
                     const row = document.getElementById('row-' + tf);
@@ -278,17 +343,11 @@
                     }
                     const realMission = resolveMission(tf, parseFloat(raw));
                     if (!realMission) return;
-                    
-                    const dist = Math.abs(realMission - REAL_PRICE);
-                    if (dist < minDist) { minDist = dist; closestTF = tf; }
-                    
                     drawMissionLine(tf, parseFloat(raw), engineBid);
-                    
                     if (row) {
                         const direction = realMission > REAL_PRICE ? "▲ BUY" : "▼ SELL";
                         row.innerHTML = `<b>${tf.toUpperCase()}</b>: ${realMission.toFixed(2)}<br>${direction}`;
                         row.style.opacity = '1';
-                        // Style Highlight for active context
                         row.style.background = (tf === currentActiveTF) ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.05)';
                     }
                 });
@@ -303,27 +362,40 @@
         ws.onclose = () => setTimeout(connect, 2000);
     }
 
+    // FITUR 4: MODE LOCK TOTAL
     function fire(side) {
         if (isLocked) return;
         if (audioCtx.state === 'suspended') audioCtx.resume();
-        isLocked = true;
+        
+        isLocked = true; // Lock Total
+        notificationLocked = true; // Stop notifications
+        
         document.getElementById('lock-overlay').style.display = 'flex';
+        
+        // Disable UI
+        document.querySelectorAll('.btn-ex').forEach(b => b.classList.remove('ready'));
+        
         if(ws && ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ 
-                cmd: "ENTRY", 
-                side: side, 
-                price: engineBid,
-                realPrice: engineBid + mt5Offset,
-                tf: currentActiveTF
+                cmd: "ENTRY", side: side, price: engineBid, 
+                realPrice: engineBid + mt5Offset, tf: currentActiveTF 
             }));
         }
     }
 
-    // TF SELECTION MONITOR (AWARENESS)
+    // Permission Trigger
+    document.addEventListener('click', () => {
+        if (Notification.permission !== 'granted') Notification.requestPermission();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+    }, { once: true });
+
     document.addEventListener('click', (e) => {
+        if (isLocked) return;
         const text = e.target.innerText ? e.target.innerText.toLowerCase() : '';
-        if (['m1', 'm5', 'm15', 'm30', 'h1'].includes(text)) {
+        if (TF_LIST.includes(text)) {
             currentActiveTF = text;
+            enterHoldStart = null;
+            spikeValidState = false;
         }
     });
 
@@ -342,4 +414,4 @@
     connect();
 </script>
 </body>
-    </html>
+</html>
