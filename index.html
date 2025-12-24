@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>XAU PREDATOR V12.2 - PRO TERMINAL</title>
+    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+    <style>
+        :root {
+            --bg: #050505; --card: #111; --text: #eee; --accent: #00ffff;
+            --wait: #444; --arming: #ffcc00; --enter: #00ff66; --locked: #ff4444;
+        }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body {
+            margin: 0; background: var(--bg); color: var(--text);
+            font-family: 'Consolas', monospace; height: 100vh; overflow: hidden;
+            display: flex; flex-direction: column; padding: 8px;
+        }
+        .grid { display: grid; grid-template-rows: 1fr auto; gap: 8px; height: 100%; }
+        .box { background: var(--card); border: 1px solid #333; border-radius: 8px; overflow: hidden; position: relative; flex-grow: 1; }
+        #chart { width: 100%; height: 100%; }
+        .sidebar { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+        .card { background: #000; border: 1px solid #222; border-radius: 6px; padding: 8px; text-align: center; position: relative; }
+        .label { font-size: 10px; color: #666; text-transform: uppercase; margin-bottom: 2px; }
+        .val { font-size: 18px; font-weight: bold; }
+        #price { font-size: 28px; color: var(--accent); }
+        #reason { grid-column: span 2; color: var(--accent); font-size: 13px; min-height: 40px; display: flex; align-items: center; justify-content: center; border: 1px solid #333; }
+        #debug { grid-column: span 2; font-size: 11px; color: #ff6666; background: #1a0000; border: 1px solid #4d0000; padding: 6px; border-radius: 4px; }
+        #log { grid-column: span 2; height: 70px; overflow-y: auto; font-size: 11px; color: #00ff66; background: #000; border: 1px solid #222; padding: 4px; border-radius: 4px; }
+        .btns { grid-column: span 2; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+        .btn { padding: 14px; border: none; border-radius: 6px; font-weight: bold; color: #fff; opacity: 0.15; transition: 0.2s; text-transform: uppercase; }
+        .buy { background: #008800; border-bottom: 3px solid #004400; }
+        .sell { background: #880000; border-bottom: 3px solid #440000; }
+        .active { opacity: 1; box-shadow: 0 0 15px currentColor; cursor: pointer; }
+        .ind { position: absolute; bottom: 0; left: 0; height: 4px; width: 100%; background: var(--wait); transition: 0.3s; }
+    </style>
+</head>
+<body>
+
+<div class="grid">
+    <div class="box">
+        <div id="chart"></div>
+        <div id="ind" class="ind"></div>
+    </div>
+
+    <div class="sidebar">
+        <div class="card" style="grid-column: span 2;">
+            <div class="label">XAUUSD BID (LIVE)</div>
+            <div id="price" class="val">0.00</div>
+            <div id="raw" style="font-size: 11px; color: #555;">RAW: 0.0000</div>
+        </div>
+
+        <div class="card"><div class="label">Bias</div><div id="bias" class="val">-</div></div>
+        <div class="card"><div class="label">State</div><div id="state" class="val">-</div></div>
+
+        <div id="reason" class="card">WAITING DATA...</div>
+        <div id="debug">DEBUG: booting...</div>
+        <div id="log"></div>
+
+        <div class="btns">
+            <button id="buy-btn" class="btn buy">BUY TRIGGER</button>
+            <button id="sell-btn" class="btn sell">SELL TRIGGER</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const WORKER_URL = "wss://xauusdsuperfinal3.sapammeded.workers.dev/";
+    let ws, lastState = "", lastDataTime = 0;
+
+    const chart = LightweightCharts.createChart(document.getElementById('chart'), {
+        layout: { backgroundColor: '#000', textColor: '#d1d4dc' },
+        grid: { vertLines: { color: '#111' }, horzLines: { color: '#111' } },
+        timeScale: { timeVisible: true, secondsVisible: true },
+        crosshair: { mode: LightweightCharts.CrosshairMode.Normal }
+    });
+
+    const candle = chart.addCandlestickSeries({
+        upColor: '#00ff00', downColor: '#ff0000', borderVisible: false, wickUpColor: '#00ff00', wickDownColor: '#ff0000'
+    });
+
+    const entryL = chart.addLineSeries({ color: '#00ffff', lineWidth: 2, priceLineVisible: false });
+    const slL = chart.addLineSeries({ color: '#ff4444', lineWidth: 2, lineStyle: 2, priceLineVisible: false });
+    const tpL = chart.addLineSeries({ color: '#00ff66', lineWidth: 2, lineStyle: 2, priceLineVisible: false });
+    const zU = chart.addLineSeries({ color: 'rgba(0, 255, 255, 0.2)', lineWidth: 1, priceLineVisible: false });
+    const zL = chart.addLineSeries({ color: 'rgba(0, 255, 255, 0.2)', lineWidth: 1, priceLineVisible: false });
+
+    function dbg(msg, isError = true) {
+        const d = document.getElementById('debug');
+        d.innerText = "DEBUG: " + msg;
+        d.style.color = isError ? "#ff6666" : "#00ff66";
+        d.style.background = isError ? "#1a0000" : "#001a00";
+    }
+
+    function log(msg) {
+        const l = document.getElementById('log');
+        const d = document.createElement('div');
+        d.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+        l.prepend(d);
+        if (l.children.length > 50) l.lastChild.remove();
+    }
+
+    function beep() {
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const g = ctx.createGain();
+            osc.connect(g); g.connect(ctx.destination);
+            osc.frequency.value = 880; g.gain.value = 0.1;
+            osc.start(); osc.stop(ctx.currentTime + 0.2);
+        } catch(e) {}
+    }
+
+    function connect() {
+        dbg("connecting to websocket...", true);
+        ws = new WebSocket(WORKER_URL);
+
+        ws.onopen = () => {
+            dbg("connected ✔", false);
+            log("WS CONNECTION ESTABLISHED");
+        };
+
+        ws.onclose = () => {
+            dbg("reconnecting...", true);
+            log("WS DISCONNECTED");
+            setTimeout(connect, 2000);
+        };
+
+        ws.onerror = (e) => {
+            dbg("websocket error - check internet/https", true);
+        };
+
+        ws.onmessage = (e) => {
+            try {
+                const d = JSON.parse(e.data);
+                if (d.type !== "TICK") return;
+                
+                lastDataTime = Date.now();
+                document.getElementById('price').innerText = d.bid;
+                document.getElementById('raw').innerText = "RAW: " + d.raw;
+                
+                const z = d.discretionaryZone;
+                document.getElementById('bias').innerText = z.bias;
+                document.getElementById('bias').style.color = z.bias === "BUY" ? "#00ff66" : "#ff4444";
+                document.getElementById('state').innerText = z.state;
+                document.getElementById('reason').innerText = z.reason;
+
+                const colors = { WAIT: "#444", ARMING: "#ffcc00", ENTER: "#00ff66", LOCKED: "#ff4444" };
+                document.getElementById('ind').style.background = colors[z.state] || "#444";
+
+                const t = Math.floor(Date.now() / 1000);
+                if (d.debug) {
+                    zU.setData([{ time: t - 3600, value: d.debug.rawHigh }, { time: t + 60, value: d.debug.rawHigh }]);
+                    zL.setData([{ time: t - 3600, value: d.debug.rawLow }, { time: t + 60, value: d.debug.rawLow }]);
+                }
+
+                if (d.position) {
+                    entryL.setData([{ time: t - 600, value: d.position.entry }, { time: t + 60, value: d.position.entry }]);
+                    slL.setData([{ time: t - 600, value: d.position.sl }, { time: t + 60, value: d.position.sl }]);
+                    tpL.setData([{ time: t - 600, value: d.position.tp }, { time: t + 60, value: d.position.tp }]);
+                } else {
+                    entryL.setData([]); slL.setData([]); tpL.setData([]);
+                }
+
+                if (z.state === "ENTER" && lastState !== "ENTER") {
+                    log("🎯 ENTRY CONFIRMED: " + z.reason);
+                    beep();
+                    if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+                }
+                lastState = z.state;
+
+                const buyBtn = document.getElementById('buy-btn');
+                const sellBtn = document.getElementById('sell-btn');
+                buyBtn.className = `btn buy ${z.state === "ENTER" && z.bias === "BUY" ? "active" : ""}`;
+                sellBtn.className = `btn sell ${z.state === "ENTER" && z.bias === "SELL" ? "active" : ""}`;
+
+            } catch(err) {
+                dbg("data parse error", true);
+            }
+        };
+    }
+
+    setInterval(() => {
+        if (lastDataTime > 0 && Date.now() - lastDataTime > 5000) {
+            dbg("no data received (idle > 5s)", true);
+        }
+    }, 1000);
+
+    (async function init() {
+        try {
+            const r = await fetch("https://api.binance.com/api/v3/klines?symbol=PAXGUSDT&interval=1m&limit=100");
+            const d = await r.json();
+            candle.setData(d.map(x => ({
+                time: x[0] / 1000,
+                open: parseFloat(x[1]),
+                high: parseFloat(x[2]),
+                low: parseFloat(x[3]),
+                close: parseFloat(x[4])
+            })));
+            log("CANDLE HISTORY LOADED");
+            connect();
+        } catch(e) {
+            dbg("failed to load history", true);
+            connect();
+        }
+    })();
+
+    window.addEventListener('resize', () => {
+        chart.resize(document.querySelector('.box').clientWidth, document.querySelector('.box').clientHeight);
+    });
+</script>
+
+</body>
+</html>
