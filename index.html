@@ -1,189 +1,239 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="id">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>XAU PREDATOR – STABLE ENGINE</title>
-<script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
-<style>
-:root{
-  --bg:#050505;--card:#111;--text:#eee;--accent:#00ffff;
-  --wait:#444;--arming:#ffcc00;--enter:#00ff66;--locked:#ff4444;
-  --h1:#bf00ff;--m15:#ffff00;--m5:#00ff00;--m1:#ffffff;
-}
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;outline:none}
-body{
-  margin:0;background:var(--bg);color:var(--text);
-  font-family:Consolas,monospace;height:100vh;overflow:hidden;
-  display:flex;flex-direction:column;padding:8px;user-select:none;
-}
-.grid{display:grid;grid-template-rows:1fr auto;gap:8px;height:100%}
-.box{background:var(--card);border:1px solid #333;border-radius:8px;overflow:hidden;position:relative}
-#chart{width:100%;height:100%}
-.ind{position:absolute;bottom:0;left:0;height:6px;width:100%;background:var(--wait);transition:0.3s;z-index:10}
-.sidebar{display:grid;grid-template-columns:1fr 1fr;gap:6px}
-.card{background:#000;border:1px solid #222;border-radius:6px;padding:8px;text-align:center}
-.label{font-size:10px;color:#666;text-transform:uppercase;letter-spacing:1px}
-.val{font-size:18px;font-weight:bold}
-#price{font-size:28px;color:var(--accent)}
-#reason{grid-column:span 2;color:var(--arming);min-height:36px;display:flex;align-items:center;justify-content:center;font-size:11px;padding:4px}
-#debug{grid-column:span 2;font-size:10px;color:#00ff66;background:#001a00;padding:4px}
-#log{grid-column:span 2;height:85px;overflow-y:auto;font-size:11px;color:#00ff66;text-align:left;border:1px solid #222;padding:4px;background:#050505}
-.btns{grid-column:span 2;display:grid;grid-template-columns:1fr 1fr;gap:6px}
-.btn{padding:16px;border:none;border-radius:6px;font-weight:bold;color:#fff;opacity:0.15;transition:0.2s;font-size:14px;cursor:pointer}
-.buy{background:#00ff66;color:#000}
-.sell{background:#ff4444;color:#fff}
-.active{opacity:1;box-shadow:0 0 20px currentColor;transform:scale(0.98);border:2px solid #fff}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>XAU V11 · 7/7 PERFECT SNIPER</title>
+    <style>
+        :root { 
+            --h1-p: #BF40BF; --m30-b: #0000FF; --m15-y: #FFFF00; --m5-g: #00FF00; --m1-w: #FFFFFF; 
+            --cyan: #00ffff; --wait: #ffcc00;
+        }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { margin: 0; background: #000; color: #00ff66; font-family: 'Courier New', monospace; overflow: hidden; }
+        
+        #status-bar { 
+            position: fixed; top: 0; width: 100%; height: 45px; 
+            background: rgba(0,0,0,0.95); display: flex; align-items: center; 
+            justify-content: center; z-index: 10000; font-size: 12px; 
+            font-weight: 900; border-bottom: 1px solid #333; transition: 0.3s;
+            text-transform: uppercase;
+        }
+
+        #chart-mission-overlay {
+            position: fixed; top: 50px; right: 80px; z-index: 500;
+            display: flex; flex-direction: column; gap: 4px; pointer-events: none;
+        }
+        .chart-tag {
+            font-size: 10px; font-weight: bold; padding: 2px 8px; border-radius: 4px;
+            background: rgba(0,0,0,0.7); border-right: 4px solid; color: #fff;
+            text-align: right; backdrop-filter: blur(2px);
+        }
+
+        /* UI LOGIC: PRIORITY GLOW */
+        .priority-active { 
+            box-shadow: inset 0 0 15px rgba(0,255,255,0.4); 
+            border-right: 4px solid var(--cyan) !important;
+            animation: priority-pulse 1s infinite alternate;
+        }
+        @keyframes priority-pulse { from { opacity: 0.8; } to { opacity: 1; border-color: #fff !important; } }
+
+        #disc-zone {
+            position: fixed; left: 0; right: 0; top: 50%; height: 120px;
+            margin-top: -60px; border-top: 1px dashed rgba(0,255,255,0.3);
+            border-bottom: 1px dashed rgba(0,255,255,0.3); display: none; z-index: 9998;
+        }
+        #disc-zone.state-enter { background: rgba(0,255,255,0.15); display: block; border-top: 3px solid var(--cyan); border-bottom: 3px solid var(--cyan); }
+
+        #mission-panel {
+            position: fixed; top: 55px; left: 10px; width: 280px;
+            background: rgba(0,0,0,0.95); border: 1px solid #333; border-radius: 8px; 
+            z-index: 10005; padding: 15px; transition: 0.3s; transform: translateX(-320px); opacity: 0;
+        }
+        #mission-panel.show { transform: translateX(0); opacity: 1; }
+
+        .m-row { display: flex; flex-direction: column; font-size: 11px; margin-bottom: 10px; padding: 8px; border-radius: 4px; background: rgba(255,255,255,0.03); border-left: 5px solid; transition: 0.3s; }
+        .m-header { display: flex; justify-content: space-between; align-items: center; }
+        .tf-label { font-weight: bold; padding: 2px 6px; border-radius: 2px; color: #000; font-size: 10px; }
+        .achieved { opacity: 0.3; filter: grayscale(1); box-shadow: none !important; }
+        .time-rem { font-size: 9px; color: var(--cyan); }
+
+        .price-copy-btn {
+            margin-top: 5px; background: rgba(0,255,102,0.1); border: 1px solid rgba(0,255,102,0.3);
+            color: #00ff66; padding: 6px; border-radius: 4px; cursor: pointer;
+            text-align: center; font-weight: bold; font-size: 14px;
+        }
+        .price-copy-btn:active { background: #00ff66; color: #000; }
+
+        #translator-box {
+            position: fixed; bottom: 150px; right: 10px; z-index: 10006;
+            background: rgba(10,10,10,0.9); padding: 10px; border: 1px solid #444; border-radius: 8px;
+        }
+        #translator-box input { background: #000; border: 1px solid #555; color: var(--cyan); width: 80px; font-size: 12px; padding: 4px; }
+
+        .dir-up { color: #00ff66; }
+        .dir-down { color: #ff4444; }
+
+        #footer { position: fixed; bottom: 0; width: 100%; height: 55px; background: #000; border-top: 1px solid #222; display: flex; justify-content: space-between; align-items: center; padding: 0 15px; z-index: 10000; }
+        .btn-trade { flex: 1; margin: 0 5px; padding: 15px; border-radius: 8px; font-weight: 900; border: none; font-size: 16px; }
+    </style>
 </head>
 <body>
-<div class="grid">
-  <div class="box"><div id="chart"></div><div id="ind" class="ind"></div></div>
-  <div class="sidebar">
-    <div class="card" style="grid-column:span 2">
-      <div id="price" class="val">0.00</div>
-      <div id="raw" style="font-size:10px;color:#444">RAW: 0.0000</div>
+
+<div id="status-bar">SYSTEM BOOTING...</div>
+<div id="disc-zone"></div>
+<div id="chart-mission-overlay"></div>
+
+<button style="position:fixed; top:55px; left:10px; z-index:10007; background:#111; color:#fff; border:1px solid #444; padding:8px; border-radius:5px; font-size:10px; font-weight:bold;" onclick="document.getElementById('mission-panel').classList.toggle('show')">MISSIONS</button>
+
+<div id="mission-panel">
+    <div class="m-row" id="row-h1" style="border-color: var(--h1-p);"><div class="m-header"><span class="tf-label" style="background:var(--h1-p)">H1 MISSION</span><span id="tim-h1" class="time-rem"></span></div><div id="val-h1">...</div><div class="price-copy-btn" id="copy-h1" onclick="copyPrice(this)">COPY MT5</div></div>
+    <div class="m-row" id="row-m30" style="border-color: var(--m30-b);"><div class="m-header"><span class="tf-label" style="background:var(--m30-b);color:#fff">M30 MISSION</span><span id="tim-m30" class="time-rem"></span></div><div id="val-m30">...</div><div class="price-copy-btn" id="copy-m30" onclick="copyPrice(this)">COPY MT5</div></div>
+    <div class="m-row" id="row-m15" style="border-color: var(--m15-y);"><div class="m-header"><span class="tf-label" style="background:var(--m15-y)">M15 MISSION</span><span id="tim-m15" class="time-rem"></span></div><div id="val-m15">...</div><div class="price-copy-btn" id="copy-m15" onclick="copyPrice(this)">COPY MT5</div></div>
+    <div class="m-row" id="row-m5" style="border-color: var(--m5-g);"><div class="m-header"><span class="tf-label" style="background:var(--m5-g)">M5 MISSION</span><span id="tim-m5" class="time-rem"></span></div><div id="val-m5">...</div><div class="price-copy-btn" id="copy-m5" onclick="copyPrice(this)">COPY MT5</div></div>
+    <div class="m-row" id="row-m1" style="border-color: var(--m1-w);"><div class="m-header"><span class="tf-label" style="background:var(--m1-w)">M1 MISSION</span><span id="tim-m1" class="time-rem"></span></div><div id="val-m1">...</div><div class="price-copy-btn" id="copy-m1" onclick="copyPrice(this)">COPY MT5</div></div>
+</div>
+
+<div id="translator-box">
+    <input type="number" id="mt5-input" step="0.01" placeholder="Price">
+    <button onclick="setMT5Anchor()" style="background:var(--cyan); border:none; padding:4px; font-weight:bold; cursor:pointer;">SYNC</button>
+</div>
+
+<div id="footer">
+    <div id="price-display" style="font-size:11px;">E: 0.00<br><span style="color:var(--cyan)">MT5: --</span></div>
+    <div style="display:flex; flex:1; justify-content:flex-end;">
+        <button id="btn-buy" style="background:#00ff66; color:#000" class="btn-trade" onclick="sendEntry('BUY')">BUY</button>
+        <button id="btn-sell" style="background:#ff4444; color:#fff;" class="btn-trade" onclick="sendEntry('SELL')">SELL</button>
     </div>
-    <div class="card"><div class="label">Bias</div><div id="bias" class="val">-</div></div>
-    <div class="card"><div class="label">State</div><div id="state" class="val">WAIT</div></div>
-    <div id="reason" class="card">ENGINE READY...</div>
-    <div id="log" class="card"></div>
-    <div id="debug" class="card">STATUS: POLLING ACTIVE</div>
-    <div class="btns">
-      <button id="buyBtn" class="btn buy" onclick="manualTrigger('BUY')">EXECUTE BUY</button>
-      <button id="sellBtn" class="btn sell" onclick="manualTrigger('SELL')">EXECUTE SELL</button>
-    </div>
-  </div>
+</div>
+
+<div style="position:fixed; top:0; left:0; width:100%; height:100%; z-index:1;">
+    <iframe id="tv-chart" src="https://s.tradingview.com/widgetembed/?symbol=OANDA:XAUUSD&interval=15&theme=dark" style="width:100%;height:100%;border:none;"></iframe>
 </div>
 
 <script>
-/* ================= ENGINE CORE & LOGISTIK (REST) ================= */
-let lastTick=0, state="WAIT", bias="WAIT", lastState="WAIT";
-let rawHigh=0, rawLow=0, smoothPrice=0;
-let entryPrice=0, slPrice=0, tpPrice=0;
-let missions = { h1: 0, m15: 0, m5: 0, m1: 0 };
+    const WS_URL = "wss://xauusdsuperfinal.sapammeded.workers.dev/";
+    let ws, currentBid = 0, engineAnchor = null, mt5Anchor = null, lastAlertTime = 0;
 
-/* ================= CHART CONFIG ================= */
-const chart = LightweightCharts.createChart(document.getElementById("chart"), {
-    layout: { backgroundColor: "#050505", textColor: "#d1d4dc" },
-    grid: { vertLines: { color: "#111" }, horzLines: { color: "#111" } },
-    timeScale: { timeVisible: true, secondsVisible: true },
-    crosshair: { mode: LightweightCharts.CrosshairMode.Normal }
-});
-const candleSeries = chart.addCandlestickSeries();
-const zU = chart.addLineSeries({ color: "rgba(255,255,255,0.05)", title: 'Zone High' });
-const zL = chart.addLineSeries({ color: "rgba(255,255,255,0.05)", title: 'Zone Low' });
-const lineEntry = chart.addLineSeries({ color: "#00ffff", lineStyle: 2, title: 'ENTRY' });
-const lineSL = chart.addLineSeries({ color: "#ff4444", lineStyle: 3, title: 'SL' });
-const lineTP = chart.addLineSeries({ color: "#00ff66", lineStyle: 3, title: 'TP' });
-
-// Mission Price (High Accuracy Colors)
-const mLineH1 = chart.addLineSeries({ color: "#bf00ff", lineWidth: 2 });  // Purple
-const mLineM15 = chart.addLineSeries({ color: "#ffff00", lineWidth: 2 }); // Yellow
-const mLineM5 = chart.addLineSeries({ color: "#00ff00", lineWidth: 2 });  // Green
-const mLineM1 = chart.addLineSeries({ color: "#ffffff", lineWidth: 2 });  // White
-
-function logMsg(m){
-    const logEl = document.getElementById("log");
-    const d = document.createElement("div");
-    d.textContent = `[${new Date().toLocaleTimeString()}] ${m}`;
-    logEl.prepend(d);
-    if(logEl.childNodes.length > 50) logEl.removeChild(logEl.lastChild);
-}
-
-function beep(freq = 880) {
-    try {
-        const a = new (window.AudioContext || window.webkitAudioContext)();
-        const o = a.createOscillator(); const g = a.createGain();
-        o.connect(g); g.connect(a.destination); o.frequency.value = freq;
-        g.gain.value = 0.05; o.start(); o.stop(a.currentTime + 0.1);
-    } catch(e){}
-}
-
-/* ================= EXECUTION & STATE MACHINE ================= */
-function manualTrigger(dir) {
-    if (state === "LOCKED") { state = "WAIT"; entryPrice = 0; logMsg("ENGINE RESET"); return; }
-    state = "LOCKED";
-    entryPrice = smoothPrice;
-    const offset = 0.40;
-    slPrice = dir === "BUY" ? entryPrice - offset : entryPrice + offset;
-    tpPrice = dir === "BUY" ? entryPrice + (offset * 2) : entryPrice - (offset * 2);
-    beep(1200); navigator.vibrate?.([300, 100, 300]);
-    logMsg(`EXECUTED: ${dir} @ ${entryPrice.toFixed(2)}`);
-}
-
-function updateEngine(raw) {
-    smoothPrice = smoothPrice ? smoothPrice * 0.8 + raw * 0.2 : raw;
-    const now = Math.floor(Date.now() / 1000);
-
-    // High Accuracy Range & Mission Price
-    if (!rawHigh || smoothPrice > rawHigh) { rawHigh = smoothPrice; missions.h1 = rawHigh + 0.3; }
-    if (!rawLow || smoothPrice < rawLow) { rawLow = smoothPrice; missions.m1 = (rawHigh+rawLow)/2; }
-    
-    const range = rawHigh - rawLow;
-    missions.m15 = rawLow + (range * 0.75);
-    missions.m5 = rawLow + (range * 0.25);
-    missions.m1 = (rawHigh + rawLow) / 2;
-
-    bias = (smoothPrice > missions.m1) ? "BUY" : "SELL";
-
-    if (state !== "LOCKED") {
-        const target = bias === "BUY" ? missions.m15 : missions.m5;
-        if (Math.abs(smoothPrice - target) < 0.10) state = "ENTER";
-        else if (Math.abs(smoothPrice - target) < 0.20) state = "ARMING";
-        else state = "WAIT";
+    function setMT5Anchor() {
+        const val = document.getElementById('mt5-input').value;
+        if (val && currentBid) { mt5Anchor = parseFloat(val); engineAnchor = null; alert("SYNCED!"); }
     }
 
-    // UI & Alerts
-    document.getElementById("price").textContent = raw.toFixed(2);
-    document.getElementById("raw").textContent = "RAW: " + raw.toFixed(4);
-    document.getElementById("bias").textContent = bias;
-    document.getElementById("bias").style.color = bias === "BUY" ? "#00ff66" : "#ff4444";
-    document.getElementById("state").textContent = state;
-    document.getElementById("ind").style.background = `var(--${state.toLowerCase()})`;
-    document.getElementById("reason").textContent = state === "ENTER" ? "MISSION REACHED - FIRE!" : "SCANNING HABIT...";
-    
-    document.getElementById("buyBtn").className = `btn buy ${state === "ENTER" && bias === "BUY" ? "active" : ""}`;
-    document.getElementById("sellBtn").className = `btn sell ${state === "ENTER" && bias === "SELL" ? "active" : ""}`;
-
-    if(state === "ENTER" && lastState !== "ENTER") { beep(660); navigator.vibrate?.(200); logMsg("PREDATOR ENTER ZONE!"); }
-    lastState = state;
-
-    // Chart Update
-    zU.setData([{ time: now-60, value: rawHigh }, { time: now+10, value: rawHigh }]);
-    zL.setData([{ time: now-60, value: rawLow }, { time: now+10, value: rawLow }]);
-    mLineM15.setData([{ time: now-60, value: missions.m15 }, { time: now+10, value: missions.m15 }]);
-    mLineM5.setData([{ time: now-60, value: missions.m5 }, { time: now+10, value: missions.m5 }]);
-    mLineM1.setData([{ time: now-60, value: missions.m1 }, { time: now+10, value: missions.m1 }]);
-    
-    if (state === "LOCKED") {
-        lineEntry.setData([{ time: now-60, value: entryPrice }, { time: now+10, value: entryPrice }]);
-        lineSL.setData([{ time: now-60, value: slPrice }, { time: now+10, value: slPrice }]);
-        lineTP.setData([{ time: now-60, value: tpPrice }, { time: now+10, value: tpPrice }]);
-    } else {
-        lineEntry.setData([]); lineSL.setData([]); lineTP.setData([]);
+    function translateToMT5(p) {
+        if (engineAnchor === null || mt5Anchor === null || isNaN(p)) return null;
+        return (mt5Anchor + (p - engineAnchor)).toFixed(2);
     }
-}
 
-/* ================= AMUNISI (POLLING REST) ================= */
-async function pollPrice() {
-    try {
-        const r = await fetch("https://fapi.binance.com/fapi/v1/ticker/price?symbol=PAXGUSDT");
-        const d = await r.json();
-        lastTick = Date.now();
-        updateEngine(parseFloat(d.price));
-    } catch(e) { document.getElementById("debug").textContent = "STATUS: DATA DELAY"; }
-}
+    function copyPrice(el) {
+        const price = el.getAttribute('data-price');
+        if (!price || price === "DONE") return;
+        navigator.clipboard.writeText(price).then(() => {
+            if(navigator.vibrate) navigator.vibrate(50);
+            alert("Copied: " + price);
+        });
+    }
 
-// History & Start
-fetch("https://fapi.binance.com/fapi/v1/klines?symbol=PAXGUSDT&interval=1m&limit=100")
-    .then(r => r.json()).then(d => {
-        candleSeries.setData(d.map(x => ({ time: x[0]/1000, open: +x[1], high: +x[2], low: +x[3], close: +x[4] })));
-        logMsg("HISTORY LOADED");
-        setInterval(pollPrice, 450); // Interval stabil buat Android
-    });
+    const alertCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function playAlert() {
+        if (Date.now() - lastAlertTime < 4000) return;
+        lastAlertTime = Date.now();
+        if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+        let c = 0; const i = setInterval(() => {
+            const o = alertCtx.createOscillator(); const g = alertCtx.createGain();
+            o.connect(g); g.connect(alertCtx.destination);
+            o.type = 'square'; o.frequency.value = 1400; g.gain.value = 0.1;
+            o.start(); o.stop(alertCtx.currentTime + 0.1);
+            c++; if (c >= 4) clearInterval(i);
+        }, 200);
+    }
 
-window.addEventListener("resize", () => chart.resize(document.querySelector(".box").clientWidth, document.querySelector(".box").clientHeight));
+    function connect() {
+        ws = new WebSocket(WS_URL);
+        const bar = document.getElementById('status-bar');
+        const zone = document.getElementById('disc-zone');
+        const overlay = document.getElementById('chart-mission-overlay');
+
+        ws.onmessage = (e) => {
+            const data = JSON.parse(e.data);
+            if (data.type === "TICK") {
+                currentBid = parseFloat(data.bid);
+                if (mt5Anchor !== null && engineAnchor === null) engineAnchor = currentBid;
+                const mt5PriceTick = translateToMT5(currentBid);
+                document.getElementById('price-display').innerHTML = `E: ${currentBid.toFixed(2)}<br>MT5: ${mt5PriceTick || '--'}`;
+
+                const dz = data.discretionaryZone;
+                if (data.mode === "DISCRETIONARY" && dz?.state === "ENTER") {
+                    zone.classList.add('state-enter'); bar.innerText = `🔥 FIRE ${dz.bias}`;
+                    bar.style.background = "var(--cyan)"; bar.style.color = "#000"; playAlert();
+                } else if (dz?.state === "ARMING") {
+                    zone.classList.remove('state-enter'); bar.innerText = "⚠️ ARMING - READY";
+                    bar.style.background = "#111"; bar.style.color = "var(--wait)";
+                } else {
+                    zone.classList.remove('state-enter'); bar.innerText = "SCANNING MARKET...";
+                    bar.style.background = "rgba(0,0,0,0.95)"; bar.style.color = "#00ff66";
+                }
+
+                if (!data.mission) return;
+                let overlayHtml = '';
+                let priorityFound = false;
+                const tfs = ['m1', 'm5', 'm15', 'm30', 'h1']; // Urutan TF terkecil dulu
+
+                // TF Priority Resolver (Explicit UI Logic)
+                tfs.forEach(tf => {
+                    const rowEl = document.getElementById(`row-${tf}`);
+                    const valEl = document.getElementById(`val-${tf}`);
+                    const timEl = document.getElementById(`tim-${tf}`);
+                    const copEl = document.getElementById(`copy-${tf}`);
+                    const mVal = data.mission[tf];
+                    const achAt = data.achievedAt?.[tf];
+
+                    if (mVal === "ACHIEVED") {
+                        const age = Date.now() - achAt;
+                        if (age > 3600000) { rowEl.style.display = 'none'; return; }
+                        rowEl.style.display = 'flex'; rowEl.classList.add('achieved');
+                        rowEl.classList.remove('priority-active');
+                        valEl.innerHTML = `<span style="opacity:0.4">COMPLETED</span>`;
+                        const rem = 3600 - Math.floor(age / 1000);
+                        timEl.innerText = rem > 0 ? `(${Math.floor(rem/60)}m)` : "";
+                        copEl.setAttribute('data-price', "DONE"); copEl.innerText = "DONE";
+                    } else {
+                        rowEl.style.display = 'flex'; rowEl.classList.remove('achieved'); timEl.innerText = "";
+                        
+                        // LOGIC: TF Terkecil yang BELUM achieved jadi Prioritas (Glow)
+                        if (!priorityFound) {
+                            rowEl.classList.add('priority-active');
+                            priorityFound = true;
+                        } else {
+                            rowEl.classList.remove('priority-active');
+                        }
+
+                        const target = parseFloat(mVal);
+                        const mt5Target = translateToMT5(target);
+                        const dir = target > currentBid ? "UP ▲" : "DOWN ▼";
+                        const cls = target > currentBid ? "dir-up" : "dir-down";
+                        valEl.innerHTML = `<span class="${cls}">${dir}</span> <b>${mVal}</b>`;
+                        
+                        copEl.setAttribute('data-price', mt5Target || "--");
+                        copEl.innerText = mt5Target ? `COPY MT5: ${mt5Target}` : "WAIT SYNC";
+                        
+                        const tfColor = getComputedStyle(document.documentElement).getPropertyValue(`--${tf}-p`) || 
+                                        getComputedStyle(document.documentElement).getPropertyValue(`--${tf}-b`) ||
+                                        getComputedStyle(document.documentElement).getPropertyValue(`--${tf}-y`) ||
+                                        getComputedStyle(document.documentElement).getPropertyValue(`--${tf}-g`) ||
+                                        getComputedStyle(document.documentElement).getPropertyValue(`--${tf}-w`);
+                        overlayHtml += `<div class="chart-tag" style="border-color:${tfColor.trim()}">${tf.toUpperCase()}: ${mt5Target || '--'}</div>`;
+                    }
+                });
+                overlay.innerHTML = overlayHtml;
+            }
+        };
+        ws.onclose = () => setTimeout(connect, 2000);
+    }
+
+    function sendEntry(side) { if (ws && ws.readyState === 1) { if (alertCtx.state === 'suspended') alertCtx.resume(); ws.send(JSON.stringify({ cmd: "ENTRY", side })); } }
+
+    connect();
 </script>
 </body>
-  </html>
+      </html>
