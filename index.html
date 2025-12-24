@@ -3,237 +3,343 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>XAU V11 · 7/7 PERFECT SNIPER</title>
+    <title>XAU V11 – ABSOLUTE SNIPER SYSTEM</title>
     <style>
-        :root { 
-            --h1-p: #BF40BF; --m30-b: #0000FF; --m15-y: #FFFF00; --m5-g: #00FF00; --m1-w: #FFFFFF; 
-            --cyan: #00ffff; --wait: #ffcc00;
+        :root {
+            --h1: #BF40BF; --m30: #0000FF; --m15: #FFFF00; --m5: #00FF00; --m1: #FFFFFF;
+            --bg: #000; --cyan: #00ffff; --fire: #ff0000; --wait: #ffcc00;
         }
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        body { margin: 0; background: #000; color: #00ff66; font-family: 'Courier New', monospace; overflow: hidden; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
+        body { margin: 0; background: var(--bg); color: #fff; font-family: 'Courier New', monospace; overflow: hidden; height: 100vh; }
+
+        /* STATUS BAR */
+        #status-bar {
+            position: fixed; top: 0; width: 100%; height: 70px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 1000; background: #0a0a0a; border-bottom: 3px solid #333;
+        }
+        #state-text { font-size: 24px; font-weight: 900; letter-spacing: 2px; }
+        #active-tf-display { font-size: 14px; color: var(--cyan); font-weight: bold; margin-top: 2px; }
+
+        .enter-mode { background: var(--fire) !important; color: #fff !important; animation: pulse 0.4s infinite alternate; }
+        @keyframes pulse { from { opacity: 1; } to { opacity: 0.7; } }
+
+        /* CHART & OVERLAY */
+        #main-container { position: relative; width: 100%; height: calc(100% - 150px); margin-top: 70px; z-index: 1; }
+        iframe { width: 100%; height: 100%; border: none; }
         
-        #status-bar { 
-            position: fixed; top: 0; width: 100%; height: 45px; 
-            background: rgba(0,0,0,0.95); display: flex; align-items: center; 
-            justify-content: center; z-index: 10000; font-size: 12px; 
-            font-weight: 900; border-bottom: 1px solid #333; transition: 0.3s;
-            text-transform: uppercase;
+        #chart-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 10;
         }
+        .price-line {
+            position: absolute; left: 0; width: 100%; height: 2px;
+            display: flex; align-items: center; justify-content: flex-end;
+            transition: top 0.1s linear;
+        }
+        .price-line span { font-size: 11px; font-weight: bold; background: #000; padding: 2px 6px; border: 1px solid; margin-right: 80px; }
 
-        #chart-mission-overlay {
-            position: fixed; top: 50px; right: 80px; z-index: 500;
-            display: flex; flex-direction: column; gap: 4px; pointer-events: none;
-        }
-        .chart-tag {
-            font-size: 10px; font-weight: bold; padding: 2px 8px; border-radius: 4px;
-            background: rgba(0,0,0,0.7); border-right: 4px solid; color: #fff;
-            text-align: right; backdrop-filter: blur(2px);
-        }
-
-        /* UI LOGIC: PRIORITY GLOW */
-        .priority-active { 
-            box-shadow: inset 0 0 15px rgba(0,255,255,0.4); 
-            border-right: 4px solid var(--cyan) !important;
-            animation: priority-pulse 1s infinite alternate;
-        }
-        @keyframes priority-pulse { from { opacity: 0.8; } to { opacity: 1; border-color: #fff !important; } }
-
-        #disc-zone {
-            position: fixed; left: 0; right: 0; top: 50%; height: 120px;
-            margin-top: -60px; border-top: 1px dashed rgba(0,255,255,0.3);
-            border-bottom: 1px dashed rgba(0,255,255,0.3); display: none; z-index: 9998;
-        }
-        #disc-zone.state-enter { background: rgba(0,255,255,0.15); display: block; border-top: 3px solid var(--cyan); border-bottom: 3px solid var(--cyan); }
-
+        /* MISSION PANEL (POSITION BELOW TF SELECTOR) */
         #mission-panel {
-            position: fixed; top: 55px; left: 10px; width: 280px;
-            background: rgba(0,0,0,0.95); border: 1px solid #333; border-radius: 8px; 
-            z-index: 10005; padding: 15px; transition: 0.3s; transform: translateX(-320px); opacity: 0;
+            position: fixed; right: 10px; top: 160px; width: 200px;
+            background: rgba(0,0,0,0.9); border: 1px solid #333;
+            padding: 10px; z-index: 500; display: flex; flex-direction: column; gap: 5px;
         }
-        #mission-panel.show { transform: translateX(0); opacity: 1; }
+        .m-row { padding: 6px; border-left: 5px solid; background: rgba(255,255,255,0.05); font-size: 11px; transition: 0.3s; }
+        .active-target { box-shadow: 0 0 15px var(--cyan); border-right: 3px solid #fff; transform: scale(1.05); z-index: 10; }
 
-        .m-row { display: flex; flex-direction: column; font-size: 11px; margin-bottom: 10px; padding: 8px; border-radius: 4px; background: rgba(255,255,255,0.03); border-left: 5px solid; transition: 0.3s; }
-        .m-header { display: flex; justify-content: space-between; align-items: center; }
-        .tf-label { font-weight: bold; padding: 2px 6px; border-radius: 2px; color: #000; font-size: 10px; }
-        .achieved { opacity: 0.3; filter: grayscale(1); box-shadow: none !important; }
-        .time-rem { font-size: 9px; color: var(--cyan); }
-
-        .price-copy-btn {
-            margin-top: 5px; background: rgba(0,255,102,0.1); border: 1px solid rgba(0,255,102,0.3);
-            color: #00ff66; padding: 6px; border-radius: 4px; cursor: pointer;
-            text-align: center; font-weight: bold; font-size: 14px;
+        /* FOOTER & SYNC */
+        #footer {
+            position: fixed; bottom: 0; width: 100%; height: 80px;
+            background: #000; border-top: 2px solid #222;
+            display: flex; align-items: center; padding: 0 15px; z-index: 1000;
         }
-        .price-copy-btn:active { background: #00ff66; color: #000; }
+        #price-box { flex: 1; }
+        .label { font-size: 10px; color: #888; text-transform: uppercase; }
+        .val { font-size: 26px; font-weight: 900; color: var(--cyan); }
 
-        #translator-box {
-            position: fixed; bottom: 150px; right: 10px; z-index: 10006;
-            background: rgba(10,10,10,0.9); padding: 10px; border: 1px solid #444; border-radius: 8px;
+        /* EXECUTION BUTTONS */
+        #action-box { display: flex; gap: 10px; flex: 1.5; justify-content: flex-end; }
+        .btn-ex {
+            width: 110px; height: 55px; border: none; border-radius: 6px;
+            font-size: 20px; font-weight: 900; opacity: 0.1; pointer-events: none;
+            cursor: pointer;
         }
-        #translator-box input { background: #000; border: 1px solid #555; color: var(--cyan); width: 80px; font-size: 12px; padding: 4px; }
+        .btn-buy { background: #00ff66; color: #000; }
+        .btn-sell { background: var(--fire); color: #fff; }
+        .ready { opacity: 1 !important; pointer-events: auto !important; }
 
-        .dir-up { color: #00ff66; }
-        .dir-down { color: #ff4444; }
+        #sync-btn { background: #222; color: var(--cyan); border: 1px solid var(--cyan); padding: 10px; font-weight: bold; margin-right: 15px; border-radius: 4px; }
 
-        #footer { position: fixed; bottom: 0; width: 100%; height: 55px; background: #000; border-top: 1px solid #222; display: flex; justify-content: space-between; align-items: center; padding: 0 15px; z-index: 10000; }
-        .btn-trade { flex: 1; margin: 0 5px; padding: 15px; border-radius: 8px; font-weight: 900; border: none; font-size: 16px; }
+        #sync-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95); z-index: 2000;
+            display: none; align-items: center; justify-content: center;
+        }
+        .modal-box { background: #111; padding: 30px; border: 2px solid var(--cyan); width: 90%; max-width: 400px; text-align: center; }
+        input { width: 100%; background: #000; color: var(--cyan); border: 1px solid #444; padding: 15px; font-size: 24px; text-align: center; margin: 20px 0; }
+
+        /* LOCK SCREEN (ENTRY DISCIPLINE) */
+        #lock-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.98); z-index: 5000; display: none;
+            align-items: center; justify-content: center; font-size: 30px; font-weight: 900; color: var(--fire); text-align: center;
+        }
+
+        .patch-mission-btn {
+            position: fixed; bottom: 90px; left: 10px; z-index: 9999;
+            background: #111; color: var(--cyan); border: 1px solid var(--cyan);
+            padding: 8px 10px; font-size: 10px; font-weight: bold; border-radius: 4px;
+        }
     </style>
 </head>
 <body>
 
-<div id="status-bar">SYSTEM BOOTING...</div>
-<div id="disc-zone"></div>
-<div id="chart-mission-overlay"></div>
-
-<button style="position:fixed; top:55px; left:10px; z-index:10007; background:#111; color:#fff; border:1px solid #444; padding:8px; border-radius:5px; font-size:10px; font-weight:bold;" onclick="document.getElementById('mission-panel').classList.toggle('show')">MISSIONS</button>
-
-<div id="mission-panel">
-    <div class="m-row" id="row-h1" style="border-color: var(--h1-p);"><div class="m-header"><span class="tf-label" style="background:var(--h1-p)">H1 MISSION</span><span id="tim-h1" class="time-rem"></span></div><div id="val-h1">...</div><div class="price-copy-btn" id="copy-h1" onclick="copyPrice(this)">COPY MT5</div></div>
-    <div class="m-row" id="row-m30" style="border-color: var(--m30-b);"><div class="m-header"><span class="tf-label" style="background:var(--m30-b);color:#fff">M30 MISSION</span><span id="tim-m30" class="time-rem"></span></div><div id="val-m30">...</div><div class="price-copy-btn" id="copy-m30" onclick="copyPrice(this)">COPY MT5</div></div>
-    <div class="m-row" id="row-m15" style="border-color: var(--m15-y);"><div class="m-header"><span class="tf-label" style="background:var(--m15-y)">M15 MISSION</span><span id="tim-m15" class="time-rem"></span></div><div id="val-m15">...</div><div class="price-copy-btn" id="copy-m15" onclick="copyPrice(this)">COPY MT5</div></div>
-    <div class="m-row" id="row-m5" style="border-color: var(--m5-g);"><div class="m-header"><span class="tf-label" style="background:var(--m5-g)">M5 MISSION</span><span id="tim-m5" class="time-rem"></span></div><div id="val-m5">...</div><div class="price-copy-btn" id="copy-m5" onclick="copyPrice(this)">COPY MT5</div></div>
-    <div class="m-row" id="row-m1" style="border-color: var(--m1-w);"><div class="m-header"><span class="tf-label" style="background:var(--m1-w)">M1 MISSION</span><span id="tim-m1" class="time-rem"></span></div><div id="val-m1">...</div><div class="price-copy-btn" id="copy-m1" onclick="copyPrice(this)">COPY MT5</div></div>
+<div id="status-bar">
+    <div id="state-text">CONNECTING...</div>
+    <div id="active-tf-display">WAITING FOR DATA</div>
 </div>
 
-<div id="translator-box">
-    <input type="number" id="mt5-input" step="0.01" placeholder="Price">
-    <button onclick="setMT5Anchor()" style="background:var(--cyan); border:none; padding:4px; font-weight:bold; cursor:pointer;">SYNC</button>
+<div id="main-container">
+    <div id="chart-overlay"></div>
+    <iframe id="tv-chart" src="https://s.tradingview.com/widgetembed/?symbol=OANDA:XAUUSD&interval=1&theme=dark"></iframe>
+</div>
+
+<div id="mission-panel">
+    <div class="m-row" id="row-h1" style="border-color: var(--h1)">H1: --</div>
+    <div class="m-row" id="row-m30" style="border-color: var(--m30)">M30: --</div>
+    <div class="m-row" id="row-m15" style="border-color: var(--m15)">M15: --</div>
+    <div class="m-row" id="row-m5" style="border-color: var(--m5)">M5: --</div>
+    <div class="m-row" id="row-m1" style="border-color: var(--m1)">M1: --</div>
 </div>
 
 <div id="footer">
-    <div id="price-display" style="font-size:11px;">E: 0.00<br><span style="color:var(--cyan)">MT5: --</span></div>
-    <div style="display:flex; flex:1; justify-content:flex-end;">
-        <button id="btn-buy" style="background:#00ff66; color:#000" class="btn-trade" onclick="sendEntry('BUY')">BUY</button>
-        <button id="btn-sell" style="background:#ff4444; color:#fff;" class="btn-trade" onclick="sendEntry('SELL')">SELL</button>
+    <button id="sync-btn" onclick="openSync()">SYNC MT5</button>
+    <div id="price-box">
+        <div class="label">REAL PRICE (MT5)</div>
+        <div id="real-price-val" class="val">0.00</div>
+    </div>
+    <div id="action-box">
+        <button id="btn-buy" class="btn-ex btn-buy" onclick="fire('BUY')">BUY</button>
+        <button id="btn-sell" class="btn-ex btn-sell" onclick="fire('SELL')">SELL</button>
     </div>
 </div>
 
-<div style="position:fixed; top:0; left:0; width:100%; height:100%; z-index:1;">
-    <iframe id="tv-chart" src="https://s.tradingview.com/widgetembed/?symbol=OANDA:XAUUSD&interval=15&theme=dark" style="width:100%;height:100%;border:none;"></iframe>
+<div id="sync-modal">
+    <div class="modal-box">
+        <div style="color:var(--cyan); font-weight:bold;">SINKRONISASI MT5 (OFFSET LOCK)</div>
+        <input type="number" id="mt5-val" step="0.01" placeholder="Harga di MT5">
+        <button onclick="saveSync()" style="width:100%; background:var(--cyan); border:none; padding:15px; font-weight:bold; cursor:pointer;">LOCK REALITY</button>
+    </div>
 </div>
+
+<div id="lock-overlay">TARGET EXECUTED<br>SYSTEM LOCKED</div>
 
 <script>
     const WS_URL = "wss://xauusdsuperfinal.sapammeded.workers.dev/";
-    let ws, currentBid = 0, engineAnchor = null, mt5Anchor = null, lastAlertTime = 0;
+    const TF_LIST = ['m1', 'm5', 'm15', 'm30', 'h1'];
+    
+    let ws;
+    let engineBid = 0;
+    let mt5Offset = 0;
+    let isLocked = false;
+    let lastAlert = 0;
+    let currentActiveTF = 'm1'; // TF Context Awareness
 
-    function setMT5Anchor() {
-        const val = document.getElementById('mt5-input').value;
-        if (val && currentBid) { mt5Anchor = parseFloat(val); engineAnchor = null; alert("SYNCED!"); }
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    window.__MISSION_PATCH__ = {
+        visible: true,
+        mt5Offset: null,
+        lastM5Bucket: null,
+        lockedMission: {}
+    };
+
+    function openSync() { document.getElementById('sync-modal').style.display = 'flex'; }
+    
+    function saveSync() {
+        const val = parseFloat(document.getElementById('mt5-val').value);
+        if (val && engineBid) {
+            mt5Offset = val - engineBid;
+            window.__MISSION_PATCH__.mt5Offset = mt5Offset;
+            document.getElementById('sync-modal').style.display = 'none';
+            if(ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ cmd: "RE_SCAN", syncPrice: val }));
+            }
+        }
     }
 
-    function translateToMT5(p) {
-        if (engineAnchor === null || mt5Anchor === null || isNaN(p)) return null;
-        return (mt5Anchor + (p - engineAnchor)).toFixed(2);
+    function beep() {
+        if (Date.now() - lastAlert < 4000) return;
+        lastAlert = Date.now();
+        if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 200, 100, 200]);
+        for(let i=0; i<4; i++) {
+            setTimeout(() => {
+                const o = audioCtx.createOscillator();
+                const g = audioCtx.createGain();
+                o.connect(g); g.connect(audioCtx.destination);
+                o.type = 'square'; o.frequency.value = 1000;
+                g.gain.value = 0.1; o.start(); o.stop(audioCtx.currentTime + 0.1);
+            }, i * 250);
+        }
     }
 
-    function copyPrice(el) {
-        const price = el.getAttribute('data-price');
-        if (!price || price === "DONE") return;
-        navigator.clipboard.writeText(price).then(() => {
-            if(navigator.vibrate) navigator.vibrate(50);
-            alert("Copied: " + price);
-        });
+    function getM5Bucket(ts) { return Math.floor(ts / 300000); }
+
+    function resolveMission(tf, rawPrice) {
+        const patch = window.__MISSION_PATCH__;
+        if (patch.mt5Offset === null) return null;
+        const nowBucket = getM5Bucket(Date.now());
+        if (nowBucket === patch.lastM5Bucket && patch.lockedMission[tf]) return patch.lockedMission[tf];
+        const realMission = rawPrice + patch.mt5Offset;
+        patch.lockedMission[tf] = realMission;
+        patch.lastM5Bucket = nowBucket;
+        return realMission;
     }
 
-    const alertCtx = new (window.AudioContext || window.webkitAudioContext)();
-    function playAlert() {
-        if (Date.now() - lastAlertTime < 4000) return;
-        lastAlertTime = Date.now();
-        if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
-        let c = 0; const i = setInterval(() => {
-            const o = alertCtx.createOscillator(); const g = alertCtx.createGain();
-            o.connect(g); g.connect(alertCtx.destination);
-            o.type = 'square'; o.frequency.value = 1400; g.gain.value = 0.1;
-            o.start(); o.stop(alertCtx.currentTime + 0.1);
-            c++; if (c >= 4) clearInterval(i);
-        }, 200);
+    // 1️⃣ DRAW FULL MISSION LINE (ABSOLUTE SYNC)
+    function drawMissionLine(tf, engineMission, enginePrice) {
+        const overlay = document.getElementById('chart-overlay');
+        if (!overlay || !window.__MISSION_PATCH__.visible) return;
+        const color = getComputedStyle(document.documentElement).getPropertyValue(`--${tf}`).trim();
+        const diff = (engineMission - enginePrice) * 20; 
+        const top = (overlay.offsetHeight / 2) - diff;
+
+        const line = document.createElement('div');
+        line.className = 'price-line';
+        line.style.width = '100%';
+        line.style.top = top + 'px';
+        line.style.borderTop = `2px ${tf === currentActiveTF ? 'solid' : 'dashed'} ${color}`;
+        line.style.zIndex = (tf === currentActiveTF) ? '15' : '10';
+        
+        const realVal = engineMission + (window.__MISSION_PATCH__.mt5Offset || 0);
+        line.innerHTML = `
+            <span style="border-color:${color}; color:${color}; background:rgba(0,0,0,0.8); right:0; position:absolute;">
+                ${tf.toUpperCase()} ${realVal.toFixed(2)}
+            </span>`;
+        overlay.appendChild(line);
     }
 
     function connect() {
         ws = new WebSocket(WS_URL);
-        const bar = document.getElementById('status-bar');
-        const zone = document.getElementById('disc-zone');
-        const overlay = document.getElementById('chart-mission-overlay');
-
         ws.onmessage = (e) => {
             const data = JSON.parse(e.data);
-            if (data.type === "TICK") {
-                currentBid = parseFloat(data.bid);
-                if (mt5Anchor !== null && engineAnchor === null) engineAnchor = currentBid;
-                const mt5PriceTick = translateToMT5(currentBid);
-                document.getElementById('price-display').innerHTML = `E: ${currentBid.toFixed(2)}<br>MT5: ${mt5PriceTick || '--'}`;
+            if (data.type !== "TICK" || isLocked) return;
 
-                const dz = data.discretionaryZone;
-                if (data.mode === "DISCRETIONARY" && dz?.state === "ENTER") {
-                    zone.classList.add('state-enter'); bar.innerText = `🔥 FIRE ${dz.bias}`;
-                    bar.style.background = "var(--cyan)"; bar.style.color = "#000"; playAlert();
-                } else if (dz?.state === "ARMING") {
-                    zone.classList.remove('state-enter'); bar.innerText = "⚠️ ARMING - READY";
-                    bar.style.background = "#111"; bar.style.color = "var(--wait)";
-                } else {
-                    zone.classList.remove('state-enter'); bar.innerText = "SCANNING MARKET...";
-                    bar.style.background = "rgba(0,0,0,0.95)"; bar.style.color = "#00ff66";
+            engineBid = parseFloat(data.bid);
+            const REAL_PRICE = engineBid + mt5Offset;
+            document.getElementById('real-price-val').innerText = REAL_PRICE.toFixed(2);
+
+            const state = data.discretionaryZone?.state;
+            const bar = document.getElementById('status-bar');
+            const btns = document.querySelectorAll('.btn-ex');
+            const stateText = document.getElementById('state-text');
+
+            // 2️⃣ & 3️⃣ MULTI-TF AWARENESS LOGIC
+            let activeMissionRaw = data.mission ? data.mission[currentActiveTF] : null;
+            let tfEnterTriggered = false;
+
+            if (activeMissionRaw && activeMissionRaw !== 'ACHIEVED') {
+                const realTarget = parseFloat(activeMissionRaw) + mt5Offset;
+                const dist = Math.abs(realTarget - REAL_PRICE);
+                if (dist < 0.15 && state === "ENTER") {
+                    tfEnterTriggered = true;
                 }
+            }
 
-                if (!data.mission) return;
-                let overlayHtml = '';
-                let priorityFound = false;
-                const tfs = ['m1', 'm5', 'm15', 'm30', 'h1']; // Urutan TF terkecil dulu
+            if (tfEnterTriggered) {
+                bar.className = "enter-mode";
+                stateText.innerText = `ENTER ${data.discretionaryZone.bias} (${currentActiveTF.toUpperCase()})`;
+                btns.forEach(b => b.classList.add('ready'));
+                if (currentActiveTF === 'm1') beep(); // Audio only for M1 as per rule
+            } else if (state === "ARMING") {
+                bar.className = "";
+                stateText.innerText = `ARMING... (${currentActiveTF.toUpperCase()})`;
+                btns.forEach(b => b.classList.remove('ready'));
+            } else {
+                bar.className = "";
+                stateText.innerText = `WAIT / ARMING (${currentActiveTF.toUpperCase()})`;
+                btns.forEach(b => b.classList.remove('ready'));
+            }
 
-                // TF Priority Resolver (Explicit UI Logic)
-                tfs.forEach(tf => {
-                    const rowEl = document.getElementById(`row-${tf}`);
-                    const valEl = document.getElementById(`val-${tf}`);
-                    const timEl = document.getElementById(`tim-${tf}`);
-                    const copEl = document.getElementById(`copy-${tf}`);
-                    const mVal = data.mission[tf];
-                    const achAt = data.achievedAt?.[tf];
+            // 4️⃣ & 5️⃣ MISSION RENDERER (ALL TF PERSISTENCE)
+            if (data.mission && mt5Offset !== null) {
+                const overlay = document.getElementById('chart-overlay');
+                if (overlay) overlay.innerHTML = '';
+                let closestTF = null;
+                let minDist = Infinity;
 
-                    if (mVal === "ACHIEVED") {
-                        const age = Date.now() - achAt;
-                        if (age > 3600000) { rowEl.style.display = 'none'; return; }
-                        rowEl.style.display = 'flex'; rowEl.classList.add('achieved');
-                        rowEl.classList.remove('priority-active');
-                        valEl.innerHTML = `<span style="opacity:0.4">COMPLETED</span>`;
-                        const rem = 3600 - Math.floor(age / 1000);
-                        timEl.innerText = rem > 0 ? `(${Math.floor(rem/60)}m)` : "";
-                        copEl.setAttribute('data-price', "DONE"); copEl.innerText = "DONE";
-                    } else {
-                        rowEl.style.display = 'flex'; rowEl.classList.remove('achieved'); timEl.innerText = "";
-                        
-                        // LOGIC: TF Terkecil yang BELUM achieved jadi Prioritas (Glow)
-                        if (!priorityFound) {
-                            rowEl.classList.add('priority-active');
-                            priorityFound = true;
-                        } else {
-                            rowEl.classList.remove('priority-active');
-                        }
-
-                        const target = parseFloat(mVal);
-                        const mt5Target = translateToMT5(target);
-                        const dir = target > currentBid ? "UP ▲" : "DOWN ▼";
-                        const cls = target > currentBid ? "dir-up" : "dir-down";
-                        valEl.innerHTML = `<span class="${cls}">${dir}</span> <b>${mVal}</b>`;
-                        
-                        copEl.setAttribute('data-price', mt5Target || "--");
-                        copEl.innerText = mt5Target ? `COPY MT5: ${mt5Target}` : "WAIT SYNC";
-                        
-                        const tfColor = getComputedStyle(document.documentElement).getPropertyValue(`--${tf}-p`) || 
-                                        getComputedStyle(document.documentElement).getPropertyValue(`--${tf}-b`) ||
-                                        getComputedStyle(document.documentElement).getPropertyValue(`--${tf}-y`) ||
-                                        getComputedStyle(document.documentElement).getPropertyValue(`--${tf}-g`) ||
-                                        getComputedStyle(document.documentElement).getPropertyValue(`--${tf}-w`);
-                        overlayHtml += `<div class="chart-tag" style="border-color:${tfColor.trim()}">${tf.toUpperCase()}: ${mt5Target || '--'}</div>`;
+                TF_LIST.forEach(tf => {
+                    const raw = data.mission[tf];
+                    const row = document.getElementById('row-' + tf);
+                    if (raw === 'ACHIEVED' || isNaN(raw)) {
+                        if(row) { row.innerHTML = `${tf.toUpperCase()}: ACHIEVED`; row.style.opacity = '0.3'; }
+                        return;
+                    }
+                    const realMission = resolveMission(tf, parseFloat(raw));
+                    if (!realMission) return;
+                    
+                    const dist = Math.abs(realMission - REAL_PRICE);
+                    if (dist < minDist) { minDist = dist; closestTF = tf; }
+                    
+                    drawMissionLine(tf, parseFloat(raw), engineBid);
+                    
+                    if (row) {
+                        const direction = realMission > REAL_PRICE ? "▲ BUY" : "▼ SELL";
+                        row.innerHTML = `<b>${tf.toUpperCase()}</b>: ${realMission.toFixed(2)}<br>${direction}`;
+                        row.style.opacity = '1';
+                        // Style Highlight for active context
+                        row.style.background = (tf === currentActiveTF) ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.05)';
                     }
                 });
-                overlay.innerHTML = overlayHtml;
+
+                const tfDisplay = document.getElementById('active-tf-display');
+                if (tfDisplay) {
+                    tfDisplay.innerText = `CONTEXT: ${currentActiveTF.toUpperCase()} | MONITORING ALL TF`;
+                    tfDisplay.style.color = getComputedStyle(document.documentElement).getPropertyValue(`--${currentActiveTF}`);
+                }
             }
         };
         ws.onclose = () => setTimeout(connect, 2000);
     }
 
-    function sendEntry(side) { if (ws && ws.readyState === 1) { if (alertCtx.state === 'suspended') alertCtx.resume(); ws.send(JSON.stringify({ cmd: "ENTRY", side })); } }
+    function fire(side) {
+        if (isLocked) return;
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        isLocked = true;
+        document.getElementById('lock-overlay').style.display = 'flex';
+        if(ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ 
+                cmd: "ENTRY", 
+                side: side, 
+                price: engineBid,
+                realPrice: engineBid + mt5Offset,
+                tf: currentActiveTF
+            }));
+        }
+    }
+
+    // TF SELECTION MONITOR (AWARENESS)
+    document.addEventListener('click', (e) => {
+        const text = e.target.innerText ? e.target.innerText.toLowerCase() : '';
+        if (['m1', 'm5', 'm15', 'm30', 'h1'].includes(text)) {
+            currentActiveTF = text;
+        }
+    });
+
+    (function initMissionBtn() {
+        const btn = document.createElement('button');
+        btn.innerText = 'MISSION';
+        btn.className = 'patch-mission-btn';
+        btn.onclick = () => {
+            window.__MISSION_PATCH__.visible = !window.__MISSION_PATCH__.visible;
+            document.querySelectorAll('#mission-panel, #chart-overlay')
+                .forEach(el => el.style.display = window.__MISSION_PATCH__.visible ? '' : 'none');
+        };
+        document.body.appendChild(btn);
+    })();
 
     connect();
 </script>
 </body>
-      </html>
+    </html>
